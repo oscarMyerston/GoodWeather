@@ -19,7 +19,10 @@ class ViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        self.cityNameTextField.rx.value
+        
+        self.cityNameTextField.rx.controlEvent(.editingDidEndOnExit)
+            .asObservable()
+            .map { self.cityNameTextField.text }
             .subscribe(onNext: { city in
                 if let city = city {
                     if city.isEmpty {
@@ -44,15 +47,18 @@ class ViewController: UIViewController {
     private func fetchWeather(by city: String) {
         guard let cityEncoded = city.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed),
         let url = URL.urlForWeatherAPI(city: cityEncoded) else { return }
-        let resource = Resource<WeatherResult>(url: url)
-        URLRequest.load(resource: resource)
+        let resource = Resource<WeatherResult>(url:url)
+        let search = URLRequest.load(resource: resource)
             .observe(on: MainScheduler.instance)
-            .catchErrorJustReturn(WeatherResult.empty)
-            .subscribe(onNext: { result in
-                
-                let weather = result.main
-                self.displayWeather(weather)
-            }).disposed(by: disposeBag)
+            .asDriver(onErrorJustReturn: WeatherResult.empty)
+        
+        search.map { "\($0.main.temp) ℉" }
+            .drive(self.temperatureLabel.rx.text)
+            .disposed(by: disposeBag)
+        
+        search.map { "\($0.main.humidity) 💦"}
+            .drive(self.temperatureLabel.rx.text)
+            .disposed(by: disposeBag)
     }
 }
 
